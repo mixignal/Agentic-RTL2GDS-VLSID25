@@ -10,7 +10,7 @@
 \begin{figure}[htbp]	
     %\centerline{\includegraphics{figs/KWS-architecture.png}}
     \includegraphics[width=0.45\textwidth]{figs/KWS-architecture.png}
-    \caption{Implementation of a Keyword Spotter (KWS) [\textbf{FIXME}: Move the CNN to the host processor]}
+    \caption{Implementation of a Keyword Spotter (KWS)}
     \label{fig:KWS_Arch}
 \end{figure}
 
@@ -29,14 +29,14 @@ After applying the window function, a fast fourier transform (FFT) is performed 
 \begin{equation}
     Mel(f) = 2595\cdot \log_{10}\left({1 + \frac{f}{700}}\right) \label{eq:mel-log}
 \end{equation}
-After applying the Mel log filter, the logarithm of the Mel frequency power is calculated, followed by a Discrete Cosine Transform (DCT) to derive the MFCC coefficients. These MFCC coefficients are then utilized to classify the voice signal using a classifier such as a convolutional neural network (CNN), recurrent neural network (RNN), long short term memory (LSTM), or other similar techniques \cite{mahmood2021speech}.
+After applying the Mel log filter, the logarithm of the Mel frequency power is calculated, followed by a Discrete Cosine Transform (DCT) to derive the MFCC coefficients. These MFCC coefficients are then utilized to classify the voice signal using a classifier such as a convolutional neural network (CNN), recurrent neural network (RNN), long short term memory (LSTM), or other similar techniques \cite{mahmood2021speech}. Given that the classifier involves complex hardware and is computationally intensive, it is most effectively implemented in the host processor.
 
 Despite the architecture's popularity for KWS, the hardware implementation can differ greatly based on the application, which involves various trade-offs between power, area, and accuracy.
-For this research, a \textit{smart microphone } application was examined in which the KWS is embedded directly into the microphone. This configuration allows it to recognize one or more keywords with moderate accuracy, while consuming minimum power while occupying a small area.
+For this work, a \textit{smart microphone } application was examined in which the KWS is intended to be embedded directly into the microphone. This configuration allows it to recognize one or more keywords with moderate accuracy, consuming minimal power and occupying a small footprint.
 Now, each component is reviewed and determined on how to refine the design for this application. Digital microphones are generally built to record audio frequencies up to 22~kHz with a sample precision ranging from 12-16 bits. After capturing a keyword sample such as "Wakeup Neo", the data underwent low-pass filtering and reduction in precision using an open-source audio tool \textit{Audacity}. This procedure was progressively repeated until a noticeable effect was observed. Following multiple iterations, a 4 kHz bandwidth and 7-bit fixed-point precision were deemed adequate for the operation, resulting in significant area and power savings at the cost of minimal accuracy.
 A similar optimization was performed for the HPF (Eq.~\ref{eq:hpf}) by selecting $\alpha=31/32=0.969$, which can be implemented using a basic \textit{shift-and-add} operation rather than a hardware multiplier. 
 A hanning window was selected for the windowing function, and the coefficients were implemented using exclusively single shift operations, resulting in substantial hardware savings with a minor increase in spectral leakage. 
-Besides CNN, FFT is the next largest hardware component with respect to area and power consumption. The $Radix-2^2$ single delay feedback ($R2^2SDF$) is a design that is efficient in both area and power usage, given that it utilizes the fewest multipliers and adders compared to other FFT hardware implementations. An optimization using \textit{spectrogram} was employed to determine a 32-point FFT that results in lower frequency bins with the benefit of significant hardware savings.
+FFT is the largest hardware component with respect to area and power consumption. The $Radix-2^2$ single delay feedback ($R2^2SDF$) is a design that is efficient in both area and power usage, given that it utilizes the fewest multipliers and adders compared to other FFT hardware implementations \cite{chong20220}. An optimization using \textit{spectrogram} was employed to determine a 32-point FFT that results in lower frequency bins with the benefit of significant hardware savings.
 Equivalent hardware reductions were achieved by employing rectangular Mel filter bins as opposed to triangular ones, with only a slight reduction in accuracy. 
 Lastly, the DCT calculation is reduced, which compromises some accuracy. The host then utilizes these MFCC coefficients with classifiers such as CNN or RNN to spot the trained keyword.
 
@@ -62,13 +62,13 @@ After verification, the hardware model is transformed into a manufacturable layo
 %%% ------------------------
 \begin{figure}[htbp]
 	\includegraphics[width=0.45\textwidth]{figs/rtl2gds-toolchain.png}
-	\caption{RTL-to-GDS design flow using open-source tools.[\textbf{FIXME}: Add detail to the OpenROAD flow]}
+	\caption{RTL-to-GDS design flow using open-source tools.}
 	\label{fig:RTL-to-GDS}
 \end{figure}
 
 After the design has been verified and finalized, physical design tools are employed to transform the abstract hardware model into its physical form (GDSII). Figure~\ref{fig:RTL-to-GDS} illustrates a physical design flow utilizing a chain of open-source tools. The first step in the physical design (PD) process is \textit{synthesis}, where a tool like \textit{Yosys} synthesizes the Verilog description into a lower-level representation, such as a netlist of logic gates, suitable for physical implementation. In addition to the Verilog design code, Yosys also requires a technology library (\texttt{*.lib}) and a command script (	\texttt{*.tcl}) to perform the synthesis of the Verilog design. Once synthesis is completed, verification usually involves two steps: 1) 	\textit{Formal verification} or gate-level simulation to confirm that the synthesized netlist's functionality aligns with the original Verilog model; 2) Static Timing Analysis (STA) to ensure there are no timing issues across various process corners and temperature conditions. 
 The widely adopted tool for Static Timing Analysis (STA) is the open-source software \textit{OpenSTA}. The input to OpenSTA is the synthesized netlist and a timing constrained file (\texttt{*.sdc}). 
-After verifying that the timing requirements are met, the physical design is completed using a leading open-source application \textit{OpenROAD} \cite{ajayi2019toward}.
+After verifying that the timing requirements are met, the physical design is completed using a leading open-source application \textit{OpenROAD} \cite{ajayi2019toward}\cite{ajayi2019openroad}.
 OpenROAD itself contains many complex steps including floorplanning, cell placement, clock-tree synthesis (CTS), routing and finishing steps. In addition, every step involves several substeps, which vary depending on the complexity of the design. Each step utilizes tools and scripts, predominantly written in \textit{Tcl}, to automate the workflow. 
 
 [\textbf{FIXME}: Should we add details of each flow ?]
