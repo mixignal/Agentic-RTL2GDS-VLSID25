@@ -1,7 +1,17 @@
-\section{Agentic AI Design Flow (Arun)}
+\section{Proposed Agentic AI Design Framework}
 \label{sec:agentic}
-\begin{itemize}
-    \item Agentic architecture
-    \item Figure
-    \item Prompt engineering strategies
-\end{itemize}
+
+In this Section, we describe Aida, our proposed agentic AI based design framework for digital ASIC system design. Figure \ref{fig:agentic_designflow} shows the proposed design  framework. The design flow is broadly divided into four interrelated stages: 1) Architecture design (shaded orange), 2) RTL design (shaded yellow), 3) Netlist synthesis (shaded red), and 4) Physical design (shaded purple). At each stage, the design is driven by a combination of LLM and appropriate EDA tools operating in a feedback loop. Inputs to the LLMs include design prompts, which instructs the LLM to follow a particular set of actions, or reflection prompts which instructs the LLM to analyze the results of an action. Additionally, the capabilities of LLMs are enhanced with Retrieval Augmented Generation (RAG) techniques, where retrieval of appropriate knowledge (for example, Verilog code dataset such as MG-Verilog) provides a richer context to the LLM in generating a more accurate response. Furthermore, custom LLMs could be employed that have been fine-tuned with appropriate datasets.
+
+
+During the architecture design phase, the developer starts with a high-level system specification. They use a large language model (LLM) to decompose the system into individual components and generate a Python model representing these components. This Python script interacts with APIs for custom tools (e.g., MATLAB toolboxes via the MATLAB Engine API) and performance models. The results are then analyzed by another LLM to inform adjustments to the overall system design. This iterative design loop is repeated to evaluate trade-offs between design metrics, such as area and accuracy. The developer can intervene at any point by refining the LLM prompts to guide the design process according to their expertise.
+
+In the RTL design phase, the architectural design in Python, design prompts from the designer, and Verilog code data generated using Retrieval Augmented Generation (RAG) are provided to an LLM, which generates Verilog RTL for the design along with the necessary test benches. Functional verification is performed using the open-source Icarus simulator, and the output is analyzed by the LLM. The LLM identifies failures and generates the necessary modifications to the Verilog code. This feedback loop is repeated until functional verification is successful. As in the architectural design phase, the designer can intervene at any point to modify the prompts, Verilog RTL, or test benches to guide the design toward a desired outcome.
+
+In the Netlist synthesis phase, the Verilog RTL code is synthesized into a gate-level netlist using the open-source Yosys synthesizer, based on standard logic gates from the target process technology library. Timing analysis is then performed using the open-source OpenSTA static timing analyzer. Any timing violations are analyzed by an LLM, and a second LLM generates corrective actions to optimize the timing paths. This is followed by re-running the synthesis with adjusted constraints or updated RTL. 
+%As this step can be resource-intensive, the designer may apply an Engineering Change Order (ECO) to resolve minor issues efficiently.
+
+In the Physical design phase, the design's physical layout is created using tools from the open-source OpenROAD tool suite for backend tasks such as placement, clock tree synthesis, routing, and optimization \cite{ajayi2019openroad, ajayi2019toward}. OpenROAD utilizes multiple feedback mechanisms, including Design Rule Check (DRC) feedback, timing analysis feedback, power analysis feedback, and area feedback. Integrating agentic AI into these feedback loops is a potential area for future exploration. The final step uses the open-source Magic tool to generate GDSII files, which are then used for chip fabrication.
+
+
+
