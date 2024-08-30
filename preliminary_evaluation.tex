@@ -1,63 +1,27 @@
 \section{Preliminary Evaluation}
 \label{sec:preliminary_evaluation}
-In this section, we present a preliminary evaluation of the Keyword Spotting (KWS) architecture using our proposed Aida design flow. It is important to note that this work is still ongoing. Aida is implemented in Python, with the agentic flow built using the LangGraph framework from LangChain \cite{langgraph}. The design tools referenced are those described in Section \ref{sec:agentic}. The Large Language Model (LLM) utilized in this evaluation is OpenAI's GPT-4o model. As the design tools are still in active development, we plan to release the project as open-source once the code has reached a stable and mature state.
+In this section, we present a preliminary evaluation of the Keyword Spotting (KWS) architecture using our proposed AiEDA design flow. It is important to note that this work is still ongoing. AiEDA is implemented in Python, with the agentic flow built using the LangGraph framework from LangChain \cite{langgraph}. The design tools referenced are those described in Section \ref{sec:agentic}. The Large Language Model (LLM) utilized in this evaluation is OpenAI's GPT-4o model. As the design tools are still in active development, we plan to release the project as open-source once the code has reached a stable and mature state.
 
-\subsection{Aida - Design specification to GDS}
-The RTL, synthesis, and netlist components of Aida (see Figure Section \ref{sec:agentic}) was verified with the design of 6-bit, 32 deep FIFO. The design commenced with a prompt describing the FIFO specs and ended with the GDSII output. The Sky130 standard cell library, and PDK from SkyWater Technologies was used.
+\subsection{AiEDA - Design specification to GDS}
 
-\subsection{Aida - Architecture design}
+Our initial goal was to validate the AiEDA design flow from RTL to GDS using a relatively simple component. The RTL, synthesis, and netlist stages of AiEDA (refer to Figure Section \ref{sec:agentic}) were tested by designing a 6-bit, 32-depth FIFO. The design process began with a prompt specifying the FIFO's requirements and concluded with the generation of the GDSII layout. The Sky130 standard cell library and PDK from SkyWater Technologies were utilized for this implementation.
 
+\subsection{AiEDA - Architecture design}
 We note that despite the popularity of the KWS architecture, hardware implementation can differ greatly depending on the application, which involves various trade-offs between power, area, and accuracy.
 For this work, a \textit{smart microphone } application was examined in which the KWS is intended to be embedded directly into the microphone. This configuration allows it to recognize one or more keywords with moderate accuracy, consuming minimal power and occupying a small footprint. Each component is evaluated to determine how its design can be optimized for the specific application.
 
-Digital microphones are generally built to record audio frequencies up to 22~kHz with a sample precision ranging from 12-16 bits. The initial design prompt captured the requirements, and instructed the LLM to explore the bandwidth and precision requirements. The open-source audio tool \textit{Audacity} was incorporated into the design flow using the \textit{ mod-script-pipe} The bandwidth frequency was optimized using a cost function that ensures that the total power of the input signal remains at least 90\% of the original power. The bit-width precision was optimized based on a cost function such that the tonal component (from the FFT operation) within the bandwidth does not change significantly.
- Following multiple iterations, a 4~kHz bandwidth and 7-bit fixed-point precision were deemed adequate for the operation. The \textit{Nyquist} sampling frequency, twice the bandwidth frequency, will reduce from 44~kHz to 8~kHz resulting in approximately 5X improvement in power consumption. And the 7-bit precision will result in about 2X reduction in area as well as power. 
-This optimization loop was executed with a human in the loop.
+Digital microphones are generally built to record audio frequencies up to 22~kHz with a sample precision ranging from 12-16 bits. The initial design prompt captured the requirements, and instructed the LLM to explore the bandwidth and precision requirements. The open-source audio tool \textit{Audacity} was incorporated into the design flow using the \textit{ mod-script-pipe} plugin. The reflection prompt directed the LLM to optimize the bandwidth such that the total power of the input signal retains at least 90\% of its original power. Additionally, it instructed the LLM to optimize the bit-width precision ensuring that the tonal component (derived from the FFT operation) within the bandwidth remains largely unaffected."
+ After multiple iterations, a 4 kHz bandwidth and 7-bit fixed-point precision were found sufficient for the operation. The Nyquist sampling frequency, which is twice the bandwidth, will decrease from 44 kHz to 8 kHz, leading to an approximately 5x reduction in power consumption. Additionally, using 7-bit precision will yield around a 2x reduction in both area and power consumption.
 
-Suggested \textit{reflection prompt} for the above optimization:
-\begin{quote}
-\texttt{Print the possible reasons for the error;}
+Next, we designed the individual architectural components shown in Figure \ref{fig:KWS_Arch}. An iteration of the design similar to the overall system was performed for the HPF. The LLM was instructed (Eq.~\ref{eq:hpf}) to select an $\alpha$ that can be implemented using a simple shift-and-add operation, eliminating the need for a hardware multiplier. Following reflection by the LLM, the final design chose an $\alpha = 31/32 = 0.969$ that resulted in an insignificant DC component (first 1-2 bins of the FFT) without a significant loss of audio spectrum. 
 
-\texttt{Suggest choice of arguments to mod-script-pipe to fix the error;}
-\end{quote}
+A Hanning window was selected for the windowing function, and the LLM was instructed to design approximate coefficients exclusively using single-shift operations such that the limit spectral leakage is limited to 10\%. The output spectrum was analyzed using a Python based script. Following reflection, the LLM precomputed the coefficients in fixed-point form, generating values that can be efficiently approximated by bit-shifts (i.e., powers of 2).
 
-\textcolor{red}{Can we talk about how much savings in area and power was achieved? And what a reflection prompt might be like?}
+FFT is the largest hardware component with respect to area and power consumption. The $Radix-2^2$ single delay feedback ($R2^2SDF$) is a design that is efficient in both area and power usage, since it uses the fewest multipliers and adders compared to other FFT hardware implementations \cite{chong20220}. The output \textit{spectrogram} was analyzed using a Python based script. The LLM was tasked with evaluating FFT sizes ranging from 16-point to 256-point to identify the minimum number of points that would limit accuracy loss to within 25\%. Upon analysis of the spectrogram, the LLM determined that a 32-point FFT provides fewer frequency bins while achieving substantial hardware savings.
 
-\textcolor{blue}{Not sure about the reflection prompt. Need to discuss.}
+Similar hardware reduction strategies were achieved by employing rectangular Mel filter bins as opposed to triangular ones, with only a slight reduction in accuracy. The last process, the discrete cosine transform (DCT), is a multiply-accumulate (MACC) function \cite{chong20220}. Similar to the Hanning procedure, the coefficient multiplications are transformed into a \textit{shift-and-add} method to reduce the complexity of the hardware without greatly affecting the accuracy.
 
-Next, we designed the individual architectural components shown in Figure \ref{fig:KWS_Arch}. An iteration of the design similar to the overall system was performed for the HPF. The LLM was instructed (Eq.~\ref{eq:hpf}) to choose an $\alpha$, which can be implemented using a basic \textit{shift-and-add} operation rather than a hardware multiplier. The final design chose an $\alpha = 31/32 = 0.969$ that resulted in an insignificant DC component (first 1-2 bins of the FFT) without a significant loss of audio spectrum.  \textcolor{red}{A line or 2 on the design and reflection prompt would be good}
-
-A Hanning window was selected for the windowing function, and the LLM was instructed to design the coefficients exclusively using single-shift operations and to limit spectral leakage. The output spectrum was analyzed using a Python based script. 
-
-Suggested \textit{design prompt} for the above optimization:
-\begin{quote}
-\texttt{HPF difference equation is y[n] = x[n] - alpha x[n-1];}
-
-\texttt{Valid range for alpha is 0.9 to 1;}
-
-\texttt{alpha is realized with only shift and add operation;}
-\end{quote}
-
-\textcolor{red}{A line or 2 on the design and reflection prompt would be good}
-
-FFT is the largest hardware component with respect to area and power consumption. The $Radix-2^2$ single delay feedback ($R2^2SDF$) is a design that is efficient in both area and power usage, since it uses the fewest multipliers and adders compared to other FFT hardware implementations \cite{chong20220}. The output spectrum was analyzed using a Python based script. An optimization using \textit{spectrogram} was employed to determine a 32-point FFT that results in a lower number of frequency bins with the benefit of significant hardware savings.
-
-Suggested \textit{design prompt} for the above optimization:
-\begin{quote}
-\texttt{Number of FFT points are power of 2;}
-
-\texttt{Number of points range from 16-point to 256-point;}
-
-\texttt{Find lowest number of points without significant change in the spectrogram;}
-\end{quote}
-
-\textcolor{red}{A line or 2 on the design and reflection prompt would be good}
-
-%Since FFT hardware is the largest component in this system, incorporating agentic AI to produce a more efficient architecture than popular architectures like $R2^2SDF$ will be considered for future work.
-
-Similar hardware reduction strategies were achieved by employing rectangular Mel filter bins as opposed to triangular ones, with only a slight reduction in accuracy. 
-
-The last process, the discrete cosine transform (DCT), is a multiply-accumulate (MACC) function \cite{chong20220}. Similar to the Hanning procedure, the coefficient multiplications are transformed into a \textit{shift-and-add} method to reduce the complexity of the hardware without greatly affecting the accuracy.
  The host microcontroller then utilizes these MFCC coefficients with neural network-based classifiers such as CNN or RNN to spot the trained keyword.
 
-
+\subsection{AiEDA - End-to-end design}
+Building on the architectural design of the KWS system, we are now working on developing the full end-to-end system. This process starts with the architectural description in Python and will culminate in the GDSII output. Our goal is to complete this before the conference.
